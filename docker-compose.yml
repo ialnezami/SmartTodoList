@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Backend Django service
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - MONGODB_URL=mongodb://mongo:27017/smart_todolist
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./backend:/app
+      - backend_static:/app/staticfiles
+      - backend_media:/app/media
+    command: python manage.py runserver 0.0.0.0:8000
+
+  # Frontend Vue.js service
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # MongoDB database
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=smart_todolist
+    volumes:
+      - mongo_data:/data/db
+
+  # Redis for caching and Celery
+  redis:
+    image: redis:6.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Celery worker for background tasks
+  celery:
+    build: ./backend
+    environment:
+      - DEBUG=True
+      - MONGODB_URL=mongodb://mongo:27017/smart_todolist
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A config worker --loglevel=info
+
+  # Celery beat for scheduled tasks
+  celery-beat:
+    build: ./backend
+    environment:
+      - DEBUG=True
+      - MONGODB_URL=mongodb://mongo:27017/smart_todolist
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ./backend:/app
+    command: celery -A config beat --loglevel=info
+
+volumes:
+  mongo_data:
+  redis_data:
+  backend_static:
+  backend_media: 
